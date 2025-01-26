@@ -315,7 +315,3 @@ def demand_forecast():
     # Return all forecasts
     return jsonify({"forecasts": all_forecasts})
 
-
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5002)
