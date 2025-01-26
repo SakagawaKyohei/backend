@@ -1,1 +1,7 @@
 Flask==3.0.3
+psycopg2-binary
+pandas
+numpy
+statsmodels
+scikit-learn
+python-dotenv
