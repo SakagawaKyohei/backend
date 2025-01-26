@@ -9,10 +9,11 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-# Tải các biến môi trường từ file .env
-load_dotenv()
+# Load environment variables only in development
+if os.path.exists('.env'):
+    load_dotenv()
 
-# Lấy thông tin kết nối từ các biến môi trường
+# Get database connection info from environment variables
 POSTGRES_HOST = os.environ.get('POSTGRES_HOST1')
 POSTGRES_PORT = os.environ.get('POSTGRES_PORT', '5432')
 POSTGRES_DATABASE = os.environ.get('POSTGRES_DATABASE')
@@ -20,6 +21,14 @@ POSTGRES_USER = os.environ.get('POSTGRES_USER')
 POSTGRES_PASSWORD = os.environ.get('POSTGRES_PASSWORD')
 
 app = Flask(__name__)
+
+# Add CORS support
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE')
+    return response
 
 # Hàm kết nối đến PostgreSQL
 def get_db_connection():
@@ -58,12 +67,17 @@ def forecast_data(data, future_steps=6):
     # Chuyển kết quả dự đoán thành danh sách và trả về
     return forecast_hw.tolist()
 
-# Modified route handlers to work with Vercel
-@app.route('/api', methods=['GET'])
+# Add health check endpoint
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+
+# Modify your existing routes to remove the /api prefix since Render doesn't require it
+@app.route('/', methods=['GET'])
 def home():
     return jsonify({"message": "Flask API is running"})
 
-@app.route('/api/forecast', methods=['GET'])
+@app.route('/forecast', methods=['GET'])
 def forecast():
     try:
         data = get_data_from_db()
@@ -167,16 +181,14 @@ def forecast_food_demand(training_data, forecast_data):
     return total_forecast
 
 # Route để dự đoán nhu cầu thức ăn
-@app.route('/api/demand', methods=['POST'])
+@app.route('/demand', methods=['POST'])
 def demand_forecast():
     try:
         product_names = request.json.get('product_names', [])
-
         if not product_names:
             return jsonify({"error": "No product names provided"}), 400
 
         all_forecasts = []
-
         for product_name in product_names:
             training_data = get_training_data_from_db(product_name)
             forecast_data = get_forecast_data_from_db()
@@ -190,10 +202,23 @@ def demand_forecast():
                 forecast_result = forecast_food_demand(training_data, forecast_data)
                 all_forecasts.append({
                     "product_name": product_name,
-                    "forecast_result": float(forecast_result)  # Convert numpy float to Python float
+                    "forecast_result": float(forecast_result)
                 })
 
         return jsonify({"forecasts": all_forecasts})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Add error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def server_error(error):
+    return jsonify({"error": "Internal server error"}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
 
